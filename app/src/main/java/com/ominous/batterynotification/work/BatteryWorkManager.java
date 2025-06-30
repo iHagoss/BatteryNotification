@@ -26,7 +26,6 @@ import android.content.Intent;
 import android.os.SystemClock;
 
 import com.ominous.batterynotification.receiver.BatteryBroadcastReceiver;
-import com.ominous.batterynotification.util.NotificationUtils;
 
 import androidx.core.content.ContextCompat;
 
@@ -62,6 +61,6 @@ public class BatteryWorkManager {
                 REQUEST_CODE,
                 new Intent(context, BatteryBroadcastReceiver.class)
                         .setAction(BatteryBroadcastReceiver.ACTION_UPDATE),
-                NotificationUtils.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT);
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT);
     }
 }
