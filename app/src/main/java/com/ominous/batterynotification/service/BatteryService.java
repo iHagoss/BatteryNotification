@@ -1,22 +1,3 @@
-/*
- * Copyright 2016 - 2025 Tyler Williamson
- *
- * This file is part of BatteryNotification.
- *
- * BatteryNotification is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * BatteryNotification is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with BatteryNotification.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.ominous.batterynotification.service;
 
 import android.app.Service;
@@ -24,49 +5,68 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
-
 import com.ominous.batterynotification.util.NotificationUtils;
 
-//Updates immediately, or after 1 minute
+/**
+ * Foreground service to keep the battery notification live and updating.
+ * Updates notification every 15 seconds using most recent battery intent.
+ */
 public class BatteryService extends Service {
     public final static IntentFilter UPDATE_FILTER = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
     private final static String TAG = "BatteryService";
-    private final BroadcastReceiver bbr = new BroadcastReceiver() {
-        public void onReceive(Context context, Intent intent) {
-            Log.v(TAG, "Updating Battery Notification in foreground");
-            NotificationUtils.updateBatteryNotification(context, intent);
+    private BroadcastReceiver batteryReceiver;
+    private Handler handler = new Handler();
+    private Intent lastIntent = null;
+    private boolean running = false;
+
+    // Runnable to update notification every 15 seconds
+    private final Runnable updateTask = new Runnable() {
+        @Override
+        public void run() {
+            if (lastIntent != null) {
+                startForeground(NotificationUtils.NOTIFICATION_ID,
+                        NotificationUtils.makeBatteryNotification(BatteryService.this, lastIntent));
+            }
+            if (running) {
+                handler.postDelayed(this, 15000); // 15 second interval
+            }
         }
     };
 
     @Override
     public void onCreate() {
         super.onCreate();
-
         Log.d(TAG, "Starting Foreground Service");
+        running = true;
+        batteryReceiver = new BroadcastReceiver() {
+            public void onReceive(Context context, Intent intent) {
+                lastIntent = intent;
+            }
+        };
+        registerReceiver(batteryReceiver, UPDATE_FILTER);
+        // Immediately request initial battery intent
+        Intent sticky = registerReceiver(null, UPDATE_FILTER);
+        if (sticky != null) lastIntent = sticky;
+        handler.post(updateTask);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        //TODO this throws ForegroundServiceStartNotAllowedException on some devices because of battery optimization
-
-        this.startForeground(NotificationUtils.NOTIFICATION_ID,
-                NotificationUtils.makeBatteryNotification(this,
-                        this.registerReceiver(bbr, UPDATE_FILTER)));
-
+        // Service is already running, just keep updating notification
         return Service.START_STICKY;
     }
 
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
+    @Override
+    public IBinder onBind(Intent intent) { return null; }
 
+    @Override
     public void onDestroy() {
-        try {
-            this.unregisterReceiver(bbr);
-        } catch (IllegalArgumentException e) {
-            //
-        }
+        running = false;
+        handler.removeCallbacks(updateTask);
+        try { this.unregisterReceiver(batteryReceiver); } catch (IllegalArgumentException e) { }
+        super.onDestroy();
     }
 }
