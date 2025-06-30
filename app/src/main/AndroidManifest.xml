@@ -1,83 +1,30 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-  ~ Copyright 2016 - 2025 Tyler Williamson
-  ~
-  ~ This file is part of BatteryNotification.
-  ~
-  ~ BatteryNotification is free software: you can redistribute it and/or modify
-  ~ it under the terms of the GNU General Public License as published by
-  ~ the Free Software Foundation, either version 3 of the License, or
-  ~ (at your option) any later version.
-  ~
-  ~ BatteryNotification is distributed in the hope that it will be useful,
-  ~ but WITHOUT ANY WARRANTY; without even the implied warranty of
-  ~ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  ~ GNU General Public License for more details.
-  ~
-  ~ You should have received a copy of the GNU General Public License
-  ~ along with BatteryNotification.  If not, see <https://www.gnu.org/licenses/>.
-  -->
-
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     package="com.ominous.batterynotification">
 
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.ACCESS_SUPERUSER" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission
-        android:name="android.permission.BATTERY_STATS"
-        tools:ignore="ProtectedPermissions" />
-
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-
-    <!-- We only need this for API 28+ -->
-    <uses-sdk tools:overrideLibrary="me.weishu.freereflection" />
-
     <application
-        android:name=".application.BatteryNotification"
-        android:enableOnBackInvokedCallback="true"
         android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_scheme"
-        android:fullBackupContent="@xml/backup_scheme"
-        android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme"
-        tools:ignore="GoogleAppIndexingWarning,UnusedAttribute">
-        <activity
-            android:name=".activity.SettingsActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
         <service
             android:name=".service.BatteryService"
+            android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="This service is used to immediately update a persistent notification with battery information broadcast with the ACTION_BATTERY_CHANGED intent. This intent cannot be received through components declared in manifests, only by explicitly registering for it. The user has to explicitly enable a setting in order for this service to be enabled."/>
-        </service>
+            android:foregroundServiceType="none"/>
+
         <receiver
             android:name=".receiver.BatteryBroadcastReceiver"
             android:enabled="true"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
-                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.MY_PACKAGE_UNSUSPENDED"/>
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.ominous.batterynotification.UPDATE_ACTION" />
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
             </intent-filter>
         </receiver>
     </application>
 
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 </manifest>
