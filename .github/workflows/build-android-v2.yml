@@ -1,10 +1,10 @@
-name: Build Android App (v2 branch)
+name: Build Android App (V2 branch)
 
 on:
   push:
-    branches: [ v2 ]
+    branches: [ V2 ]
   pull_request:
-    branches: [ v2 ]
+    branches: [ V2 ]
 
 jobs:
   build:
