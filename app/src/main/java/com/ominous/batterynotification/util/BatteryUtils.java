@@ -56,6 +56,8 @@ public class BatteryUtils {
         "/sys/class/power_supply/bms/temp"
     };
 
+    private static final Locale SYDNEY_LOCALE = new Locale("en", "AU");
+
     /**
      * Attempts to read a value from sysfs using root (su), falling back to normal read.
      */
@@ -137,7 +139,7 @@ public class BatteryUtils {
     public static String getLiveDischargeCurrent(Context context) {
         Double current_mA = getCurrentNow_mA();
         if (current_mA != null) {
-            return String.format(Locale.US, "%d mA", Math.abs(current_mA.intValue()));
+            return String.format(SYDNEY_LOCALE, "%d mA", Math.abs(current_mA.intValue()));
         }
         return "Current unavailable";
     }
@@ -165,7 +167,7 @@ public class BatteryUtils {
         int h = seconds / 3600;
         int m = (seconds % 3600) / 60;
         int s = seconds % 60;
-        return String.format(Locale.US, "%dh %02dm %02ds", h, m, s);
+        return String.format(SYDNEY_LOCALE, "%dh %02dm %02ds", h, m, s);
     }
 
     /**
@@ -176,7 +178,7 @@ public class BatteryUtils {
         int level = intent.getIntExtra("level", -1);
         int scale = intent.getIntExtra("scale", 100);
         double percent = (level < 0 || scale <= 0) ? 0 : (level * 100.0 / scale);
-        String percentStr = String.format(Locale.US, "%.1f%%", percent);
+        String percentStr = String.format(SYDNEY_LOCALE, "%.1f%%", percent);
         int dotIndex = percentStr.indexOf(".");
         SpannableString ss = new SpannableString(percentStr);
         if (dotIndex > 0 && percentStr.length() > dotIndex + 1) {
@@ -198,14 +200,14 @@ public class BatteryUtils {
                 try {
                     // Most sysfs temps are in tenths of a degree C
                     double tempC = Double.parseDouble(value) / 10.0;
-                    return String.format(Locale.US, "%.1f°C", tempC);
+                    return String.format(SYDNEY_LOCALE, "%.1f°C", tempC);
                 } catch (NumberFormatException ignored) {}
             }
         }
         // Fallback: use system intent (usually tenths of a degree)
         int temp = intent.getIntExtra("temperature", -1);
         if (temp >= 0) {
-            return String.format(Locale.US, "%.1f°C", temp / 10.0);
+            return String.format(SYDNEY_LOCALE, "%.1f°C", temp / 10.0);
         }
         return "N/A";
     }
