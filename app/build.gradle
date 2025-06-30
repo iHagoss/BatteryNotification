@@ -24,7 +24,7 @@ android {
     compileSdk 36
     defaultConfig {
         applicationId "com.ominous.batterynotification"
-        minSdkVersion 17
+        minSdkVersion 21       // <-- Updated from 17 to 21
         targetSdkVersion 36
         versionCode 19
         versionName "1.4.7"
