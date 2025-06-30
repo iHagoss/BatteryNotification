@@ -11,16 +11,19 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.InputStreamReader;
 import java.io.IOException;
+import java.util.Locale;
 
 /**
  * Utility class for battery info retrieval and formatting.
  * All methods are static for convenience.
+ * Uses Australian English locale for formatting (Sydney).
  */
 public class BatteryUtils {
 
     // Fallback design capacity for Galaxy S10+ (change for your device if needed)
     private static final double FALLBACK_CAPACITY_MAH = 4100.0;
     private static final String S10_PLUS_MODEL = "SM-G975F";
+    private static final Locale SYDNEY_LOCALE = new Locale("en", "AU");
 
     /**
      * Attempts to read a value from sysfs using root (su), falling back to normal read.
@@ -90,7 +93,7 @@ public class BatteryUtils {
     public static String getLiveDischargeCurrent(Context context) {
         Double current_mA = getCurrentNow_mA();
         if (current_mA != null) {
-            return String.format("%d mA", Math.abs(current_mA.intValue()));
+            return String.format(SYDNEY_LOCALE, "%d mA", Math.abs(current_mA.intValue()));
         }
         return "Current unavailable";
     }
@@ -118,7 +121,7 @@ public class BatteryUtils {
         int h = seconds / 3600;
         int m = (seconds % 3600) / 60;
         int s = seconds % 60;
-        return String.format("%dh %02dm %02ds", h, m, s);
+        return String.format(SYDNEY_LOCALE, "%dh %02dm %02ds", h, m, s);
     }
 
     /**
@@ -129,7 +132,7 @@ public class BatteryUtils {
         int level = intent.getIntExtra("level", -1);
         int scale = intent.getIntExtra("scale", 100);
         double percent = (level < 0 || scale <= 0) ? 0 : (level * 100.0 / scale);
-        String percentStr = String.format("%.1f%%", percent);
+        String percentStr = String.format(SYDNEY_LOCALE, "%.1f%%", percent);
         int dotIndex = percentStr.indexOf(".");
         SpannableString ss = new SpannableString(percentStr);
         if (dotIndex > 0 && percentStr.length() > dotIndex + 1) {
@@ -145,7 +148,7 @@ public class BatteryUtils {
     public static String getTemperatureC(Context context, Intent intent) {
         int temp = intent.getIntExtra("temperature", -1);
         if (temp >= 0) {
-            return String.format("%.1f°C", temp / 10.0);
+            return String.format(SYDNEY_LOCALE, "%.1f°C", temp / 10.0);
         }
         return "N/A";
     }
