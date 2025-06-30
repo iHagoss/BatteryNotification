@@ -1,222 +1,212 @@
-/*
- * Copyright 2016 - 2025 Tyler Williamson
- *
- * This file is part of BatteryNotification.
- *
- * BatteryNotification is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * BatteryNotification is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with BatteryNotification.  If not, see <https://www.gnu.org/licenses/>.
- */
-
 package com.ominous.batterynotification.util;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
-import android.os.BatteryManager;
 import android.os.Build;
-import android.os.IBinder;
-import android.os.Parcel;
-import android.os.SystemClock;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.RelativeSizeSpan;
 
-import com.ominous.batterynotification.R;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.util.Locale;
 
-import java.lang.reflect.Field;
+/**
+ * Utility class for robust cross-device battery info retrieval/formatting.
+ * Includes mainstream device and AOSP fallbacks for sysfs battery paths.
+ */
+public class BatteryUtils {
 
-import androidx.annotation.NonNull;
+    // Device models and fallback design capacities (add more as needed)
+    private static final String S10_PLUS_MODEL = "SM-G975F";
+    private static final String PIXEL_6_MODEL = "oriole";           // Pixel 6 codename
+    private static final String PIXEL_7_MODEL = "panther";          // Pixel 7 codename
+    private static final String ONEPLUS_8_MODEL = "IN2013";
+    private static final double S10_PLUS_CAPACITY = 4100.0;
+    private static final double PIXEL_6_CAPACITY = 4614.0;
+    private static final double PIXEL_7_CAPACITY = 4355.0;
+    private static final double ONEPLUS_8_CAPACITY = 4300.0;
+    private static final double GENERIC_AOSP_CAPACITY = 4000.0;
 
-class BatteryUtils {
-    @NonNull
-    static String getTemperature(Context context, Intent intent, boolean useFahrenheit) {
-        double temperature = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) / 10.;
+    // Known sysfs paths for current_now (add more for other devices/kernels)
+    private static final String[] CURRENT_NOW_PATHS = new String[] {
+        // Samsung/OneUI
+        "/sys/class/power_supply/battery/current_now",
+        // AOSP/Pixel
+        "/sys/class/power_supply/bms/current_now",
+        // Some OnePlus/OPPO
+        "/sys/class/power_supply/usb/current_now",
+        // Some MIUI/Xiaomi
+        "/sys/class/power_supply/charger/current_now"
+    };
 
-        return context.getString(
-                useFahrenheit ? R.string.format_temperature_f : R.string.format_temperature_c,
-                useFahrenheit ? temperature / 5 * 9 + 32 : temperature);
-    }
+    // Known sysfs paths for charge_full_design
+    private static final String[] CHARGE_FULL_DESIGN_PATHS = new String[] {
+        // Samsung/Pixel/AOSP
+        "/sys/class/power_supply/battery/charge_full_design",
+        "/sys/class/power_supply/bms/charge_full_design"
+    };
 
-    static int getLevel(Intent intent) {
-        return intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) * 100 / intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
-    }
+    // Known sysfs paths for temp
+    private static final String[] TEMP_PATHS = new String[] {
+        "/sys/class/power_supply/battery/temp",
+        "/sys/class/power_supply/max170xx_battery/temp",
+        "/sys/class/power_supply/bms/temp"
+    };
 
-    @NonNull
-    static String getAmperage(Context context) {
-        if (Build.VERSION.SDK_INT >= 21) {
-            BatteryManager batteryManager = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
-
-            int batteryCurrent = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
-
-            return Math.abs(batteryCurrent) > 1000000 ?
-                    context.getString(R.string.format_amperage_a, batteryCurrent / 1000000.) :
-                    (Math.abs(batteryCurrent) > 1000 ?
-                            context.getString(R.string.format_amperage_ma, batteryCurrent / 1000.) :
-                            context.getString(R.string.format_amperage_ua, batteryCurrent)
-                    );
-        } else {
-            return "";
-        }
-    }
-
-    @NonNull
-    static String getHealth(Context context, Intent intent) {
-        int health = intent.getIntExtra(BatteryManager.EXTRA_HEALTH, -1);
-
-        return switch (health) {
-            case BatteryManager.BATTERY_HEALTH_COLD -> context.getString(R.string.health_cold);
-            case BatteryManager.BATTERY_HEALTH_DEAD -> context.getString(R.string.health_dead);
-            case BatteryManager.BATTERY_HEALTH_OVERHEAT ->
-                    context.getString(R.string.health_overheating);
-            case BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE ->
-                    context.getString(R.string.health_overvoltage);
-            case BatteryManager.BATTERY_HEALTH_GOOD -> context.getString(R.string.health_healthy);
-            //case BatteryManager.BATTERY_HEALTH_UNKNOWN:
-            //case BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE:
-            default -> context.getString(R.string.health_unknown);
-        };
-    }
-
-    @NonNull
-    static String getVoltage(Context context, Intent intent) {
-        int voltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1);
-
-        return context.getString(R.string.format_voltage,
-                voltage > 1000 ?
-                        voltage / 1000. :
-                        voltage);
-    }
-
-    static boolean isCharging(Intent intent) {
-        return intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_CHARGING;
-    }
-
-    @SuppressLint("PrivateApi")
-    @NonNull
-    static String getTimeRemaining(Context context, Intent intent) {
-        if (Build.VERSION.SDK_INT >= 28) {
-            try {
-                //Somehow Android made things easier instead of harder
-                BatteryManager bm = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
-
-                //noinspection JavaReflectionMemberAccess
-                Field fieldBatteryStats = BatteryManager.class.getDeclaredField("mBatteryStats");
-                fieldBatteryStats.setAccessible(true);
-                Object batteryStats = fieldBatteryStats.get(bm);
-
-                if (batteryStats != null) {
-                    Long batteryTimeRemaining = (Long) batteryStats
-                            .getClass()
-                            .getMethod("computeBatteryTimeRemaining")
-                            .invoke(batteryStats);
-                    Long chargeTimeRemaining = (Long) batteryStats
-                            .getClass()
-                            .getMethod("computeChargeTimeRemaining")
-                            .invoke(batteryStats);
-
-                    if (intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_DISCHARGING
-                            && batteryTimeRemaining != null) {
-                        return computeTimeString(context, (int) (batteryTimeRemaining / 1000));
-                    } else if (intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_CHARGING
-                            && chargeTimeRemaining != null) {
-                        return computeTimeString(context, (int) (chargeTimeRemaining / 1000));
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
+    /**
+     * Attempts to read a value from sysfs using root (su), falling back to normal read.
+     */
+    private static String readSysfs(String path) {
+        try {
+            Process process = Runtime.getRuntime().exec(new String[] {"su", "-c", "cat " + path});
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String value = reader.readLine();
+            process.waitFor();
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
             }
-        } else if (Build.VERSION.SDK_INT >= 21) {
-            try {
-                //IBatteryStats iBatteryStats = IBatteryStats.Stub.asInterface(ServiceManager.getService("batterystats");
+        } catch (Exception ignored) {}
+        // Fallback: try without root
+        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
+            String line = br.readLine();
+            if (line != null) return line.trim();
+        } catch (IOException ignored) {}
+        return null;
+    }
 
-                IBinder batteryStatsIBinder = (IBinder) Class.forName("android.os.ServiceManager")
-                        .getMethod("getService", String.class)
-                        .invoke(null, "batterystats");
-
-                Object iBatteryStats = Class
-                        .forName("com.android.internal.app.IBatteryStats$Stub")
-                        .getMethod("asInterface", IBinder.class)
-                        .invoke(null, batteryStatsIBinder);
-
-                if (iBatteryStats != null) {
-                    //byte[] data = iBatteryStats.getStatistics();
-                    byte[] data = (byte[]) iBatteryStats
-                            .getClass()
-                            .getMethod("getStatistics")
-                            .invoke(iBatteryStats);
-
-                    if (data != null) {
-                        Parcel parcel = Parcel.obtain();
-                        parcel.unmarshall(data, 0, data.length);
-                        parcel.setDataPosition(0);
-
-                        Object creator = Class
-                                .forName("com.android.internal.os.BatteryStatsImpl")
-                                .getField("CREATOR").get(null);
-
-                        if (creator != null) {
-                            //BatteryStats batteryStats = BatteryStatsImpl.CREATOR.createFromParcel(parcel);
-                            Object batteryStats = creator
-                                    .getClass()
-                                    .getMethod("createFromParcel", Parcel.class)
-                                    .invoke(creator, parcel);
-
-                            parcel.recycle();
-
-                            if (batteryStats != null) {
-                                long now = SystemClock.elapsedRealtime() * 1000;
-                                Long batteryTimeRemaining = (Long) batteryStats
-                                        .getClass()
-                                        .getMethod("computeBatteryTimeRemaining", long.class)
-                                        .invoke(batteryStats, now);
-                                Long chargeTimeRemaining = (Long) batteryStats
-                                        .getClass()
-                                        .getMethod("computeChargeTimeRemaining", long.class)
-                                        .invoke(batteryStats, now);
-
-                                if (intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_DISCHARGING
-                                        && batteryTimeRemaining != null) {
-                                    return computeTimeString(context, (int) (batteryTimeRemaining / 1000000));
-                                } else if (intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1) == BatteryManager.BATTERY_STATUS_CHARGING
-                                        && chargeTimeRemaining != null) {
-                                    return computeTimeString(context, (int) (chargeTimeRemaining / 1000000));
-                                }
-                            }
-                        }
-                    }
-                }
-
-            } catch (Exception e) {
-                e.printStackTrace();
+    /**
+     * Reads a double value from sysfs, scaled (for micro-units).
+     * Tries all candidates in paths, returns first valid; null if all fail.
+     */
+    private static Double readSysfsDouble(String[] paths, double scale) {
+        for (String path : paths) {
+            String value = readSysfs(path);
+            if (value != null) {
+                try { return Double.parseDouble(value) / scale; }
+                catch (NumberFormatException ignored) {}
             }
         }
-
-        return "";
+        return null;
     }
 
-    @NonNull
-    private static String computeTimeString(Context context, int secsRemaining) {
-        if (secsRemaining < 1) {
-            return "";
-        }
+    /**
+     * Returns current_now in mA (may be negative for discharge), or null if unavailable.
+     * Tries all mainstream device paths.
+     */
+    public static Double getCurrentNow_mA() {
+        Double current = readSysfsDouble(CURRENT_NOW_PATHS, 1000.0);
+        if (current != null) return current;
+        // Fallback: attempt to parse from AOSP battery intent, if available in future
+        return null;
+    }
 
-        int min  = (secsRemaining / 60) % 60;
-        int hour = (secsRemaining / (60 * 60)) % 24;
-        int day  = (secsRemaining / (60 * 60 * 24));
+    /**
+     * Returns design battery capacity in mAh.
+     * Tries all mainstream device paths, then model-based fallback.
+     */
+    public static double getDesignCapacity_mAh() {
+        Double capacity = readSysfsDouble(CHARGE_FULL_DESIGN_PATHS, 1000.0);
+        if (capacity != null && capacity > 1000.0) return capacity;
+        // Model-based fallback
+        String model = Build.MODEL != null ? Build.MODEL : "";
+        String device = Build.DEVICE != null ? Build.DEVICE : "";
+        if (model.equalsIgnoreCase(S10_PLUS_MODEL) || device.equalsIgnoreCase("beyond2lte")) return S10_PLUS_CAPACITY;
+        if (model.equalsIgnoreCase(PIXEL_6_MODEL) || device.equalsIgnoreCase(PIXEL_6_MODEL)) return PIXEL_6_CAPACITY;
+        if (model.equalsIgnoreCase(PIXEL_7_MODEL) || device.equalsIgnoreCase(PIXEL_7_MODEL)) return PIXEL_7_CAPACITY;
+        if (model.equalsIgnoreCase(ONEPLUS_8_MODEL) || device.equalsIgnoreCase(ONEPLUS_8_MODEL)) return ONEPLUS_8_CAPACITY;
+        return GENERIC_AOSP_CAPACITY;
+    }
 
-        if (day > 0) {
-            return context.getString(R.string.format_time_remaining_days, day, hour, min);
-        } else if (hour > 0) {
-            return context.getString(R.string.format_time_remaining_hours, hour, min);
-        } else {
-            return context.getString(R.string.format_time_remaining_mins, min);
+    /**
+     * Returns battery percent as a fraction (0..1).
+     * Always uses system battery intent.
+     */
+    public static double getPercentRemaining(Intent intent) {
+        int level = intent.getIntExtra("level", -1);
+        int scale = intent.getIntExtra("scale", 100);
+        if (level < 0 || scale <= 0) return 0.0;
+        return Math.min(1.0, Math.max(0.0, (double)level / (double)scale));
+    }
+
+    /**
+     * Returns the current draw as string (e.g. "550 mA"), or "Current unavailable".
+     */
+    public static String getLiveDischargeCurrent(Context context) {
+        Double current_mA = getCurrentNow_mA();
+        if (current_mA != null) {
+            return String.format(Locale.US, "%d mA", Math.abs(current_mA.intValue()));
         }
+        return "Current unavailable";
+    }
+
+    /**
+     * Returns the live calculated time remaining (as "Xh XXm XXs"), or "Time unavailable".
+     */
+    public static String getLiveDischargeTime(Context context, Intent intent) {
+        double percent = getPercentRemaining(intent);
+        double full_mAh = getDesignCapacity_mAh();
+        double now_mAh = full_mAh * percent;
+
+        Double current_mA = getCurrentNow_mA();
+        if (current_mA == null || Math.abs(current_mA) < 1e-2) {
+            return "Time unavailable";
+        }
+        int seconds = (int)((now_mAh / Math.abs(current_mA)) * 3600);
+        return formatTimeHMS(seconds);
+    }
+
+    /**
+     * Formats seconds as "Xh XXm XXs".
+     */
+    private static String formatTimeHMS(int seconds) {
+        int h = seconds / 3600;
+        int m = (seconds % 3600) / 60;
+        int s = seconds % 60;
+        return String.format(Locale.US, "%dh %02dm %02ds", h, m, s);
+    }
+
+    /**
+     * Returns the battery percent as a styled SpannableString (e.g., "85.6%", with decimal digit half size).
+     * Only the decimal digit is shrunk, "%" is the same size as the integer part.
+     */
+    public static SpannableString getStyledPercentString(Intent intent) {
+        int level = intent.getIntExtra("level", -1);
+        int scale = intent.getIntExtra("scale", 100);
+        double percent = (level < 0 || scale <= 0) ? 0 : (level * 100.0 / scale);
+        String percentStr = String.format(Locale.US, "%.1f%%", percent);
+        int dotIndex = percentStr.indexOf(".");
+        SpannableString ss = new SpannableString(percentStr);
+        if (dotIndex > 0 && percentStr.length() > dotIndex + 1) {
+            // Only shrink the decimal digit, not dot or percent
+            ss.setSpan(new RelativeSizeSpan(0.5f), dotIndex + 1, dotIndex + 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        return ss;
+    }
+
+    /**
+     * Returns battery temperature in Celsius as a string (e.g., "36.2°C").
+     * Tries all mainstream device paths, then system intent.
+     */
+    public static String getTemperatureC(Context context, Intent intent) {
+        // Try sysfs paths first (hardware accuracy)
+        for (String path : TEMP_PATHS) {
+            String value = readSysfs(path);
+            if (value != null) {
+                try {
+                    // Most sysfs temps are in tenths of a degree C
+                    double tempC = Double.parseDouble(value) / 10.0;
+                    return String.format(Locale.US, "%.1f°C", tempC);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        // Fallback: use system intent (usually tenths of a degree)
+        int temp = intent.getIntExtra("temperature", -1);
+        if (temp >= 0) {
+            return String.format(Locale.US, "%.1f°C", temp / 10.0);
+        }
+        return "N/A";
     }
 }
